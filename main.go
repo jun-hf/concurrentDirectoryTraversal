@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+type rootSize struct {
+	root string
+	byteSize int64
+}
+
 func main() {
 	flag.Parse()
 	roots := flag.Args()
@@ -17,7 +22,7 @@ func main() {
 		roots = []string{"."}
 	}
 
-	fileSize := make(chan int64)
+	rootCh := make(chan rootSize)
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -25,48 +30,58 @@ func main() {
 		defer wg.Done()
 		for _, r := range roots {
 			wg.Add(1)
-			go TraverseDirectory(r, &wg, fileSize)
+			go TraverseDirectory(r, &wg, rootCh, r)
 		}
 	}()
 
 	go func() {
 		wg.Wait()
-		close(fileSize)
+		close(rootCh)
 	}()
 
 	ticker := time.NewTicker(50 * time.Millisecond)
-	var totalBytes int64
+	var rootContent = []rootSize{}
 	var totalFiles int
 loop:
 	for {
 		select {
-		case size, ok := <-fileSize:
+		case rootResult, ok := <-rootCh:
 			if !ok {
 				break loop
 			}
-			totalBytes += size
+			rootContent = append(rootContent, rootResult)
 			totalFiles++
 		case <-ticker.C:
-			fmt.Printf("number of files: %v, number of bytes: %v\n", totalFiles, totalBytes)
+			printRootContent(rootContent)
 		}
 	}
 
-	fmt.Printf("number of files: %v, number of bytes: %v\n", totalFiles, totalBytes)
+	printRootContent(rootContent)
 }
 
-func TraverseDirectory(dir string, wg *sync.WaitGroup, fileSize chan<- int64) {
+func printRootContent(rootList []rootSize) {
+	rootMap := make(map[string]int64)
+	for _, r := range rootList {
+		rootMap[r.root] += r.byteSize
+	}
+	for key, value:= range rootMap {
+		fmt.Printf("root: %q size: %v bytes\n", key, value)
+	}
+}
+
+func TraverseDirectory(dir string, wg *sync.WaitGroup, rootResponse chan<- rootSize, currentRoot string) {
 	defer wg.Done()
 	for _, f := range ListDirectory(dir) {
 		if f.IsDir() {
 			dirPath := filepath.Join(dir, f.Name())
 			wg.Add(1)
-			TraverseDirectory(dirPath, wg, fileSize)
+			TraverseDirectory(dirPath, wg, rootResponse, currentRoot)
 		} else {
 			fileInfo, err := f.Info()
 			if err != nil {
 				fmt.Println(err)
 			}
-			fileSize <- fileInfo.Size()
+			rootResponse <- rootSize{currentRoot, fileInfo.Size()}
 		}
 	}
 }
