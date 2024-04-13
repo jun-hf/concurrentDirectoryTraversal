@@ -1,81 +1,52 @@
 package main
 
-// import (
-// 	"flag"
-// 	"fmt"
-// 	"io/fs"
-// 	"os"
-// 	"path/filepath"
-// 	"sync"
-// 	"time"
-// )
+import (
+	"flag"
+	"fmt"
+	"os"
+	"sync"
+)
 
-// func main() {
-// 	flag.Parse()
-// 	roots := flag.Args()
-// 	if len(roots) == 0 {
-// 		roots = []string{"."}
-// 	}
+func main() {
+	flag.Parse()
+	roots := flag.Args()
+	if len(roots) == 0 {
+		roots = []string{"."}
+	}
+	
+	var wg sync.WaitGroup
+	fileSize := make(chan int64)
 
-// 	fileSize := make(chan int64)
-// 	var wg sync.WaitGroup
-// 	go func() {
-// 		for _, r := range roots {
-// 			wg.Add(1)
-// 			go traverseDirectory(r, fileSize, &wg)
-// 		}
-// 	}()
+	for _, r := range roots{
+		wg.Add(1)
+		go TraverseDirectory(r, &wg, fileSize)
+	}
 
-// 	go func() {
-// 		wg.Wait()
-// 		fmt.Println("Closing fileSize channel")
-// 		close(fileSize)
-// 	}()
+	go func() {
+		wg.Wait()
+		close(fileSize)
+	}()
+	
 
-// 	var bytesNum int64
-// 	var fileNum int
-// 	ticker := time.NewTicker(500 *time.Millisecond)
-// 	loop:
-// 	for {
-// 		select{
-// 		case size, ok := <- fileSize:
-// 			if !ok {
-// 				break loop
-// 			}
-// 			bytesNum += size
-// 			fileNum++
-// 		case <-ticker.C:
-// 			printFileStorage(fileNum, bytesNum)
-// 		}
-// 	}
-// 	printFileStorage(fileNum, bytesNum)
-// }
+	for a := range fileSize {
+		fmt.Println(a)
+	}
+}
 
-// func listDirContent(dir string) []fs.DirEntry {
-// 	dirEntries, err := os.ReadDir(dir)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-// 	return dirEntries
-// }
-
-// func traverseDirectory(dir string, fileSize chan int64, wg *sync.WaitGroup) {
-// 	defer wg.Done()
-// 	for _, f := range listDirContent(dir) {
-// 		if f.IsDir() {
-// 			dirPath := filepath.Join(dir, f.Name())
-// 			wg.Add(1)
-// 			traverseDirectory(dirPath, fileSize, wg)
-// 		} else {
-// 			fInfo, err := f.Info()
-// 			if err != nil {
-// 				fmt.Printf("for %v unable to get info: %v",f.Name(), err)
-// 			}
-// 			fileSize <- fInfo.Size()	
-// 		}
-// 	}
-// }
-
-// func printFileStorage(fileNum int, bytesNum int64) {
-// 	fmt.Printf("number of files: %v, number of bytes: %v\n", fileNum, bytesNum)
-// }
+func TraverseDirectory(dir string, wg *sync.WaitGroup, fileSize chan <-int64) {
+	defer wg.Done()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		fmt.Println(err)
+	}
+	for _, f := range entries {
+		if !f.IsDir() {
+			fileInfo, err := f.Info()
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Printf("adding file: %v\n", f.Name())
+			fileSize <- fileInfo.Size()
+		}
+	}
+}
