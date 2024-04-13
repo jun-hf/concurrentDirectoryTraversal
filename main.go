@@ -16,7 +16,7 @@ func main() {
 	if len(roots) == 0 {
 		roots = []string{"."}
 	}
-	
+
 	fileSize := make(chan int64)
 	var wg sync.WaitGroup
 
@@ -33,20 +33,20 @@ func main() {
 		wg.Wait()
 		close(fileSize)
 	}()
-	
-	ticker := time.NewTicker(50 *time.Millisecond)
+
+	ticker := time.NewTicker(50 * time.Millisecond)
 	var totalBytes int64
 	var totalFiles int
-	loop:
+loop:
 	for {
 		select {
-		case size, ok := <- fileSize:
+		case size, ok := <-fileSize:
 			if !ok {
 				break loop
 			}
 			totalBytes += size
 			totalFiles++
-		case <- ticker.C:
+		case <-ticker.C:
 			fmt.Printf("number of files: %v, number of bytes: %v\n", totalFiles, totalBytes)
 		}
 	}
@@ -54,7 +54,7 @@ func main() {
 	fmt.Printf("number of files: %v, number of bytes: %v\n", totalFiles, totalBytes)
 }
 
-func TraverseDirectory(dir string, wg *sync.WaitGroup, fileSize chan <-int64) {
+func TraverseDirectory(dir string, wg *sync.WaitGroup, fileSize chan<- int64) {
 	defer wg.Done()
 	for _, f := range ListDirectory(dir) {
 		if f.IsDir() {
